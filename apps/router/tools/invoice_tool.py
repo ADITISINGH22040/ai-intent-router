@@ -6,7 +6,6 @@ from django.utils import timezone
 from apps.router.constants.invoice_status import InvoiceStatus
 from apps.router.models import Invoice, Order
 from apps.router.tools.base import BaseTool
-from apps.router.tools.responses import tool_response
 
 
 class InvoiceTool(BaseTool):
@@ -14,40 +13,48 @@ class InvoiceTool(BaseTool):
         try:
             order_id = int(parameters["order_id"])
         except (TypeError, ValueError):
-            return tool_response(
-                success=False,
-                errors={"order_id": ["order_id must be a valid integer."]},
-            )
+            return {
+                "success": False,
+                "data": None,
+                "errors": {"order_id": ["order_id must be a valid integer."]},
+                "meta": {"cached": False},
+            }
 
         try:
             order = Order.objects.select_related("customer", "invoice").get(pk=order_id)
         except Order.DoesNotExist:
-            return tool_response(
-                success=False,
-                errors={"order_id": [f"Order {order_id} does not exist."]},
-            )
+            return {
+                "success": False,
+                "data": None,
+                "errors": {"order_id": [f"Order {order_id} does not exist."]},
+                "meta": {"cached": False},
+            }
 
         existing_invoice = getattr(order, "invoice", None)
         if existing_invoice is not None:
-            return tool_response(
-                success=True,
-                data={
+            return {
+                "success": True,
+                "data": {
                     "created": False,
                     "invoice": self._serialize_invoice(existing_invoice),
                 },
-            )
+                "errors": None,
+                "meta": {"cached": False},
+            }
 
         with transaction.atomic():
             order = Order.objects.select_for_update().get(pk=order_id)
             existing_invoice = Invoice.objects.filter(order=order).first()
             if existing_invoice:
-                return tool_response(
-                    success=True,
-                    data={
+                return {
+                    "success": True,
+                    "data": {
                         "created": False,
                         "invoice": self._serialize_invoice(existing_invoice),
                     },
-                )
+                    "errors": None,
+                    "meta": {"cached": False},
+                }
 
             invoice = Invoice.objects.create(
                 invoice_number=self._build_invoice_number(order),
@@ -58,13 +65,15 @@ class InvoiceTool(BaseTool):
                 generated_at=timezone.now(),
             )
 
-        return tool_response(
-            success=True,
-            data={
+        return {
+            "success": True,
+            "data": {
                 "created": True,
                 "invoice": self._serialize_invoice(invoice),
             },
-        )
+            "errors": None,
+            "meta": {"cached": False},
+        }
 
     @staticmethod
     def _build_invoice_number(order: Order) -> str:

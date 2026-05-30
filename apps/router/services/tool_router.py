@@ -6,7 +6,6 @@ from apps.router.tools.currency_tool import CurrencyTool
 from apps.router.tools.exceptions import ToolExecutionError
 from apps.router.tools.invoice_tool import InvoiceTool
 from apps.router.tools.order_tool import OrderTool
-from apps.router.tools.responses import tool_response
 from apps.router.tools.summary_tool import SummaryTool
 from apps.router.tools.weather_tool import WeatherTool
 
@@ -21,22 +20,31 @@ class ToolRouter:
         parameters = parameters or {}
 
         if intent not in self._tools:
-            return tool_response(
-                success=False,
-                errors={"intent": [f"No tool is registered for intent '{intent}'."]},
-            )
+            return {
+                "success": False,
+                "data": None,
+                "errors": {"intent": [f"No tool is registered for intent '{intent}'."]},
+                "meta": {"cached": False},
+            }
 
         validation_errors = self._validate_required_parameters(intent, parameters)
         if validation_errors:
-            return tool_response(success=False, errors=validation_errors)
+            return {
+                "success": False,
+                "data": None,
+                "errors": validation_errors,
+                "meta": {"cached": False},
+            }
 
         try:
             return self._tools[intent].execute(parameters)
         except ToolExecutionError as exc:
-            return tool_response(
-                success=False,
-                errors={"tool": [str(exc)]},
-            )
+            return {
+                "success": False,
+                "data": None,
+                "errors": {"tool": [str(exc)]},
+                "meta": {"cached": False},
+            }
 
     @staticmethod
     def _default_tools() -> dict[str, BaseTool]:

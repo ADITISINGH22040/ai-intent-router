@@ -3,23 +3,39 @@ from typing import Any
 import requests
 from django.conf import settings
 
+from apps.router.services.cache_service import WEATHER_CACHE_TTL, CacheService
 from apps.router.tools.base import BaseTool
 from apps.router.tools.exceptions import ToolExecutionError
-from apps.router.tools.responses import tool_response
 
 WEATHERAPI_CURRENT_URL = "https://api.weatherapi.com/v1/current.json"
 
 
 class WeatherTool(BaseTool):
+    def __init__(self, cache_service: CacheService | None = None) -> None:
+        self._cache = cache_service or CacheService()
+
     def execute(self, parameters: dict[str, Any]) -> dict[str, Any]:
         api_key = settings.WEATHERAPI_API_KEY
         if not api_key:
-            return tool_response(
-                success=False,
-                errors={"config": ["WEATHERAPI_API_KEY is not configured."]},
-            )
+            return {
+                "success": False,
+                "data": None,
+                "errors": {"config": ["WEATHERAPI_API_KEY is not configured."]},
+                "meta": {"cached": False},
+            }
 
-        location = parameters["location"]
+        location = str(parameters["location"]).strip()
+        cache_key = self._cache.build_key("weather", location)
+
+        cached_data = self._cache.get(cache_key)
+        if cached_data is not None:
+            return {
+                "success": True,
+                "data": cached_data,
+                "errors": None,
+                "meta": {"cached": True},
+            }
+
         timeout = settings.TOOL_REQUEST_TIMEOUT
 
         try:
@@ -35,10 +51,12 @@ class WeatherTool(BaseTool):
 
         if payload.get("error"):
             message = payload["error"].get("message", "Weather API returned an error.")
-            return tool_response(
-                success=False,
-                errors={"location": [message]},
-            )
+            return {
+                "success": False,
+                "data": None,
+                "errors": {"location": [message]},
+                "meta": {"cached": False},
+            }
 
         try:
             place = payload["location"]
@@ -47,22 +65,16 @@ class WeatherTool(BaseTool):
         except (KeyError, TypeError) as exc:
             raise ToolExecutionError("Unexpected response format from Weather API.") from exc
 
-        return tool_response(
-            success=True,
-            data={
-                "location": location,
-                "resolved_name": place.get("name"),
-                "region": place.get("region"),
-                "country": place.get("country"),
-                "latitude": place.get("lat"),
-                "longitude": place.get("lon"),
-                "localtime": place.get("localtime"),
-                "temperature_c": current.get("temp_c"),
-                "temperature_f": current.get("temp_f"),
-                "feelslike_c": current.get("feelslike_c"),
-                "humidity": current.get("humidity"),
-                "wind_kph": current.get("wind_kph"),
-                "condition": condition.get("text"),
-                "condition_icon": condition.get("icon"),
-            },
-        )
+        data = {
+            "location": location,
+            "resolved_name": place.get("name"),
+            "temperature_c": current.get("temp_c"),
+            "condition": condition.get("text"),
+        }
+        self._cache.set(cache_key, data, WEATHER_CACHE_TTL)
+        return {
+            "success": True,
+            "data": data,
+            "errors": None,
+            "meta": {"cached": False},
+        }

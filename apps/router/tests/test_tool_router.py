@@ -6,7 +6,6 @@ from apps.router.models import Customer, Invoice, Order
 from apps.router.services.tool_router import ToolRouter
 from apps.router.tools.base import BaseTool
 from apps.router.tools.invoice_tool import InvoiceTool
-from apps.router.tools.responses import tool_response
 
 
 class StubTool(BaseTool):
@@ -19,10 +18,19 @@ class StubTool(BaseTool):
         return self.response
 
 
+def stub_success(data: dict) -> dict:
+    return {
+        "success": True,
+        "data": data,
+        "errors": None,
+        "meta": {"cached": False},
+    }
+
+
 class ToolRouterTests(SimpleTestCase):
     def test_validates_missing_required_parameters(self):
         router = ToolRouter(
-            tools={Intent.WEATHER_QUERY: StubTool(tool_response(success=True, data={}))}
+            tools={Intent.WEATHER_QUERY: StubTool(stub_success({}))}
         )
         result = router.route(Intent.WEATHER_QUERY, {})
 
@@ -30,20 +38,21 @@ class ToolRouterTests(SimpleTestCase):
         self.assertIn("location", result["errors"])
 
     def test_rejects_unregistered_intent(self):
-        router = ToolRouter(tools={Intent.WEATHER_QUERY: StubTool(tool_response(success=True, data={}))})
+        router = ToolRouter(tools={Intent.WEATHER_QUERY: StubTool(stub_success({}))})
         result = router.route(Intent.UNKNOWN, {})
 
         self.assertFalse(result["success"])
         self.assertIn("intent", result["errors"])
 
     def test_executes_mapped_tool(self):
-        stub = StubTool(tool_response(success=True, data={"ok": True}))
+        stub = StubTool(stub_success({"ok": True}))
         router = ToolRouter(tools={Intent.TEXT_SUMMARY: stub})
         parameters = {"text": "hello world"}
 
         result = router.route(Intent.TEXT_SUMMARY, parameters)
 
         self.assertTrue(result["success"])
+        self.assertFalse(result["meta"]["cached"])
         self.assertEqual(stub.received_parameters, parameters)
 
 
@@ -64,6 +73,8 @@ class InvoiceToolTests(TestCase):
 
         self.assertTrue(first["success"])
         self.assertTrue(second["success"])
+        self.assertFalse(first["meta"]["cached"])
+        self.assertFalse(second["meta"]["cached"])
         self.assertTrue(first["data"]["created"])
         self.assertFalse(second["data"]["created"])
         self.assertEqual(
