@@ -1,8 +1,15 @@
 from rest_framework import status
 from rest_framework.views import APIView
 
+from apps.router.llm.exceptions import (
+    LLMConfigurationError,
+    LLMProviderError,
+    LLMResponseParseError,
+    LLMValidationError,
+)
 from apps.router.responses import api_response
 from apps.router.serializers import QueryRequestSerializer
+from apps.router.services import IntentClassifier
 
 
 class QueryAPIView(APIView):
@@ -16,11 +23,26 @@ class QueryAPIView(APIView):
             )
 
         query = serializer.validated_data["query"]
+
+        try:
+            classification = IntentClassifier().classify(query)
+        except LLMConfigurationError as exc:
+            return api_response(
+                success=False,
+                errors={"llm": [str(exc)]},
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        except (LLMProviderError, LLMResponseParseError, LLMValidationError) as exc:
+            return api_response(
+                success=False,
+                errors={"llm": [str(exc)]},
+                status_code=status.HTTP_502_BAD_GATEWAY,
+            )
+
         return api_response(
             success=True,
             data={
                 "query": query,
-                "intent": None,
-                "response": "Query received. LLM processing is not implemented yet.",
+                "classification": classification,
             },
         )

@@ -103,3 +103,13 @@ REST_FRAMEWORK = {
         "rest_framework.parsers.JSONParser",
     ],
 }
+
+# LLM providers (gemini | ollama)
+LLM_PROVIDER = env("LLM_PROVIDER", default="ollama")
+LLM_REQUEST_TIMEOUT = env.int("LLM_REQUEST_TIMEOUT", default=120)
+
+GEMINI_API_KEY = env("GEMINI_API_KEY", default="")
+GEMINI_MODEL = env("GEMINI_MODEL", default="gemini-2.0-flash")
+
+OLLAMA_BASE_URL = env("OLLAMA_BASE_URL", default="http://127.0.0.1:11434")
+OLLAMA_MODEL = env("OLLAMA_MODEL", default="gemma3:4b")

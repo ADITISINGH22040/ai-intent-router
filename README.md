@@ -36,3 +36,16 @@ python manage.py runserver
 - API: http://127.0.0.1:8000/api/
 
 Postgres is exposed on host port **5433** (avoids conflict with a local Postgres on 5432).
+
+## LLM providers
+
+Set `LLM_PROVIDER` to `ollama` (default) or `gemini`.
+
+**Ollama (local):** run `ollama serve`, pull the model (`ollama pull gemma3:4b`), then:
+
+```bash
+LLM_PROVIDER=ollama
+OLLAMA_MODEL=gemma3:4b
+```
+
+**Gemini:** set `LLM_PROVIDER=gemini` and `GEMINI_API_KEY`.
