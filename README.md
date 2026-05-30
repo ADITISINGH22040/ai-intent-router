@@ -1,6 +1,24 @@
 # AI Intent Router
 
-Django REST Framework project skeleton with PostgreSQL and Redis.
+Django REST Framework project with PostgreSQL, Redis, and `django-environ`.
+
+## Layout
+
+```
+ai-intent-router/
+├── manage.py
+├── requirements.txt
+├── docker-compose.yml
+├── .env.example
+├── ai_intent_router/     # project settings
+└── apps/
+    └── router/           # main app
+        ├── constants/
+        ├── services/
+        ├── llm/
+        ├── tools/
+        └── tests/
+```
 
 ## Setup
 
