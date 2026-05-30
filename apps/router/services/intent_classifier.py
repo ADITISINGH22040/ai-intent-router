@@ -2,13 +2,16 @@ from typing import Any
 
 from apps.router.constants.intents import (
     ALLOWED_INTENTS,
-    INTENT_PARAMETERS,
     INTENT_CONFIDENCE_THRESHOLD,
+    INTENT_PARAMETERS,
     Intent,
 )
 from apps.router.llm.base import BaseLLMProvider
 from apps.router.llm.exceptions import LLMValidationError
 from apps.router.llm.factory import get_llm_provider
+from apps.router.services.exceptions import IntentClassificationError
+
+ACTIONABLE_INTENTS = ALLOWED_INTENTS - {Intent.UNKNOWN}
 
 
 class IntentClassifier:
@@ -16,6 +19,7 @@ class IntentClassifier:
     Classifies user queries via the LLM layer.
 
     Responsible for intent validation, confidence checks, and parameter extraction.
+    Raises IntentClassificationError when intent is UNKNOWN or confidence is too low.
     Does not execute tools.
     """
 
@@ -25,13 +29,14 @@ class IntentClassifier:
     def classify(self, query: str) -> dict[str, Any]:
         raw_classification = self._get_provider().classify_intent(query)
         classification = self._validate_classification(raw_classification)
-        return self._apply_confidence_threshold(classification)
+        self._ensure_actionable(classification)
+        return classification
 
     def _get_provider(self) -> BaseLLMProvider:
         return self._provider or get_llm_provider()
 
     def _validate_classification(self, payload: dict[str, Any]) -> dict[str, Any]:
-        intent = self._validate_intent(payload.get("intent"))
+        intent = self._normalize_intent(payload.get("intent"))
         confidence = self._validate_confidence(payload.get("confidence"))
         parameters = self._extract_parameters(intent, payload.get("parameters"))
 
@@ -42,7 +47,7 @@ class IntentClassifier:
         }
 
     @staticmethod
-    def _validate_intent(intent: Any) -> str:
+    def _normalize_intent(intent: Any) -> str:
         if isinstance(intent, str) and intent in ALLOWED_INTENTS:
             return intent
         return Intent.UNKNOWN
@@ -70,11 +75,17 @@ class IntentClassifier:
         return {key: raw_parameters.get(key) for key in allowed_keys}
 
     @staticmethod
-    def _apply_confidence_threshold(classification: dict[str, Any]) -> dict[str, Any]:
-        if classification["confidence"] < INTENT_CONFIDENCE_THRESHOLD:
-            return {
-                "intent": Intent.UNKNOWN,
-                "confidence": classification["confidence"],
-                "parameters": {},
-            }
-        return classification
+    def _ensure_actionable(classification: dict[str, Any]) -> None:
+        confidence = classification["confidence"]
+        intent = classification["intent"]
+
+        if confidence < INTENT_CONFIDENCE_THRESHOLD:
+            raise IntentClassificationError(
+                f"Confidence {confidence} is below the minimum threshold "
+                f"of {INTENT_CONFIDENCE_THRESHOLD}."
+            )
+
+        if intent not in ACTIONABLE_INTENTS:
+            raise IntentClassificationError(
+                "Could not determine a supported intent for this query."
+            )

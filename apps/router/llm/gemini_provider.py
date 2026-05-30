@@ -15,24 +15,27 @@ class GeminiProvider(BaseLLMProvider):
             raise LLMConfigurationError("GEMINI_API_KEY is not configured.")
 
     def classify_intent(self, query: str) -> dict:
-        raw_text = self._generate_content(query)
+        raw_text = self._generate_content(
+            self.build_classification_prompt(query),
+            response_json=True,
+        )
         return self.parse_classification(raw_text)
 
-    def _generate_content(self, query: str) -> str:
+    def complete(self, prompt: str) -> str:
+        return self._generate_content(prompt, response_json=False)
+
+    def _generate_content(self, prompt: str, *, response_json: bool) -> str:
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"
             f"{self.model}:generateContent"
         )
+        generation_config = {"temperature": 0}
+        if response_json:
+            generation_config["responseMimeType"] = "application/json"
+
         payload = {
-            "contents": [
-                {
-                    "parts": [{"text": self.build_classification_prompt(query)}],
-                }
-            ],
-            "generationConfig": {
-                "temperature": 0,
-                "responseMimeType": "application/json",
-            },
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": generation_config,
         }
 
         try:

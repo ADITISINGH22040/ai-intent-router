@@ -49,3 +49,13 @@ OLLAMA_MODEL=gemma3:4b
 ```
 
 **Gemini:** set `LLM_PROVIDER=gemini` and `GEMINI_API_KEY`.
+
+## External tool APIs
+
+```bash
+WEATHERAPI_API_KEY=your-weatherapi-key
+EXCHANGERATE_API_KEY=your-exchangerate-api-key
+```
+
+- Weather: [WeatherAPI.com](https://www.weatherapi.com/docs/) current weather (`/v1/current.json`)
+- Currency: [ExchangeRate-API](https://www.exchangerate-api.com/docs/pair-conversion-requests) pair rate (`/v6/{key}/pair/{from}/{to}`); amount conversion is computed in-app

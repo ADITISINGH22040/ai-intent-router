@@ -113,3 +113,8 @@ GEMINI_MODEL = env("GEMINI_MODEL", default="gemini-2.0-flash")
 
 OLLAMA_BASE_URL = env("OLLAMA_BASE_URL", default="http://127.0.0.1:11434")
 OLLAMA_MODEL = env("OLLAMA_MODEL", default="gemma3:4b")
+
+TOOL_REQUEST_TIMEOUT = env.int("TOOL_REQUEST_TIMEOUT", default=15)
+
+WEATHERAPI_API_KEY = env("WEATHERAPI_API_KEY", default="")
+EXCHANGERATE_API_KEY = env("EXCHANGERATE_API_KEY", default="")

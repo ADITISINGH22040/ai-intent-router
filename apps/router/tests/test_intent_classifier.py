@@ -1,6 +1,7 @@
 from django.test import SimpleTestCase
 
 from apps.router.constants.intents import Intent
+from apps.router.services.exceptions import IntentClassificationError
 from apps.router.services.intent_classifier import IntentClassifier
 
 
@@ -12,6 +13,9 @@ class StubLLMProvider:
     def classify_intent(self, query: str) -> dict:
         self.last_query = query
         return self.classification
+
+    def complete(self, prompt: str) -> str:
+        return "summary"
 
 
 class IntentClassifierTests(SimpleTestCase):
@@ -50,12 +54,11 @@ class IntentClassifierTests(SimpleTestCase):
                 "parameters": {},
             }
         )
-        result = IntentClassifier(provider=provider).classify("Book a flight")
 
-        self.assertEqual(result["intent"], Intent.UNKNOWN)
-        self.assertEqual(result["parameters"], {})
+        with self.assertRaises(IntentClassificationError):
+            IntentClassifier(provider=provider).classify("Book a flight")
 
-    def test_low_confidence_returns_unknown(self):
+    def test_rejects_low_confidence(self):
         provider = StubLLMProvider(
             {
                 "intent": "WEATHER_QUERY",
@@ -63,11 +66,9 @@ class IntentClassifierTests(SimpleTestCase):
                 "parameters": {"location": "Mumbai"},
             }
         )
-        result = IntentClassifier(provider=provider).classify("Weather in Mumbai")
 
-        self.assertEqual(result["intent"], Intent.UNKNOWN)
-        self.assertEqual(result["confidence"], 0.5)
-        self.assertEqual(result["parameters"], {})
+        with self.assertRaises(IntentClassificationError):
+            IntentClassifier(provider=provider).classify("Weather in Mumbai")
 
     def test_confidence_at_threshold_keeps_intent(self):
         provider = StubLLMProvider(
@@ -81,3 +82,15 @@ class IntentClassifierTests(SimpleTestCase):
 
         self.assertEqual(result["intent"], Intent.ORDER_LOOKUP)
         self.assertEqual(result["parameters"], {"status": "pending"})
+
+    def test_rejects_explicit_unknown_intent(self):
+        provider = StubLLMProvider(
+            {
+                "intent": "UNKNOWN",
+                "confidence": 0.95,
+                "parameters": {},
+            }
+        )
+
+        with self.assertRaises(IntentClassificationError):
+            IntentClassifier(provider=provider).classify("asdfghjkl")

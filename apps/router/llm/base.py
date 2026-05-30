@@ -16,6 +16,10 @@ class BaseLLMProvider(ABC):
             dict with keys: intent, confidence, parameters
         """
 
+    @abstractmethod
+    def complete(self, prompt: str) -> str:
+        """Run a plain-text completion (used by SummaryTool)."""
+
     def parse_classification(self, raw_text: str) -> dict:
         return parse_classification_response(raw_text)
 

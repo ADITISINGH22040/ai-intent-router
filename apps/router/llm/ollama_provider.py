@@ -18,21 +18,31 @@ class OllamaProvider(BaseLLMProvider):
             raise LLMConfigurationError("OLLAMA_BASE_URL is not configured.")
 
     def classify_intent(self, query: str) -> dict:
-        raw_text = self._chat(query)
+        raw_text = self._chat(
+            messages=[
+                {"role": "system", "content": CLASSIFICATION_PROMPT},
+                {"role": "user", "content": query},
+            ],
+            json_mode=True,
+        )
         return self.parse_classification(raw_text)
 
-    def _chat(self, query: str) -> str:
+    def complete(self, prompt: str) -> str:
+        return self._chat(
+            messages=[{"role": "user", "content": prompt}],
+            json_mode=False,
+        )
+
+    def _chat(self, messages: list[dict], *, json_mode: bool) -> str:
         url = f"{self.base_url}/api/chat"
         payload = {
             "model": self.model,
             "stream": False,
-            "format": "json",
-            "messages": [
-                {"role": "system", "content": CLASSIFICATION_PROMPT},
-                {"role": "user", "content": query},
-            ],
+            "messages": messages,
             "options": {"temperature": 0},
         }
+        if json_mode:
+            payload["format"] = "json"
 
         try:
             response = httpx.post(url, json=payload, timeout=self.timeout)
