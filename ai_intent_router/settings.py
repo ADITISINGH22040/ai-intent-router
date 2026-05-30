@@ -72,11 +72,9 @@ DATABASES = {
 
 CACHES = {
     "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
+        # Shared Redis backend for tool response caching and DRF throttling counters.
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
         "LOCATION": env("REDIS_URL", default="redis://127.0.0.1:6379/1"),
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-        },
     }
 }
 
@@ -102,6 +100,12 @@ REST_FRAMEWORK = {
     "DEFAULT_PARSER_CLASSES": [
         "rest_framework.parsers.JSONParser",
     ],
+    # DRF throttling reads/writes request history via Django's cache API.
+    # With Redis configured above, ScopedRateThrottle counters live in Redis.
+    "DEFAULT_THROTTLE_RATES": {
+        "query": "10/min",
+    },
+    "EXCEPTION_HANDLER": "apps.router.throttling.api_exception_handler",
 }
 
 # LLM providers (gemini | ollama)
