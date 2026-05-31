@@ -73,7 +73,7 @@ class QueryAPIViewHistoryTests(TestCase):
         }
 
         factory = APIRequestFactory()
-        request = factory.post("/api/query/", {"query": "Weather in London?"}, format="json")
+        request = factory.post("/query/", {"query": "Weather in London?"}, format="json")
         response = QueryAPIView.as_view()(request)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -109,7 +109,7 @@ class QueryAPIViewHistoryTests(TestCase):
 
         factory = APIRequestFactory()
         request = factory.post(
-            "/api/query/",
+            "/query/",
             {"query": "Generate invoice for order 999"},
             format="json",
         )
@@ -128,7 +128,7 @@ class QueryAPIViewHistoryTests(TestCase):
     @patch("apps.router.views.IntentClassifier")
     def test_validation_failure_creates_history(self, mock_classifier_cls):
         factory = APIRequestFactory()
-        request = factory.post("/api/query/", {"query": ""}, format="json")
+        request = factory.post("/query/", {"query": ""}, format="json")
         response = QueryAPIView.as_view()(request)
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -147,7 +147,7 @@ class QueryAPIViewHistoryTests(TestCase):
         )
 
         factory = APIRequestFactory()
-        request = factory.post("/api/query/", {"query": "hello there"}, format="json")
+        request = factory.post("/query/", {"query": "hello there"}, format="json")
         response = QueryAPIView.as_view()(request)
 
         self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
@@ -163,7 +163,7 @@ class QueryAPIViewThrottleTests(TestCase):
     def test_throttle_exception_returns_clean_json_and_logs_history(self):
         factory = APIRequestFactory()
         request = factory.post(
-            "/api/query/",
+            "/query/",
             data='{"query": "Summarize hello"}',
             content_type="application/json",
         )
