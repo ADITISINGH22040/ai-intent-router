@@ -19,6 +19,7 @@ class QueryHistory(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        db_table = "query_history"
         ordering = ["-created_at"]
         verbose_name_plural = "query histories"
 
@@ -36,6 +37,7 @@ class Customer(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        db_table = "customers"
         ordering = ["name"]
 
     def __str__(self):
@@ -59,6 +61,7 @@ class Order(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        db_table = "orders"
         ordering = ["-created_at"]
 
     def __str__(self):
@@ -80,6 +83,7 @@ class OrderItem(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        db_table = "order_items"
         ordering = ["id"]
 
     def __str__(self):
@@ -105,6 +109,7 @@ class Invoice(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        db_table = "invoices"
         ordering = ["-created_at"]
 
     def __str__(self):
