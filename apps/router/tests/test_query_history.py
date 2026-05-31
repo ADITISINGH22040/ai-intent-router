@@ -77,6 +77,11 @@ class QueryAPIViewHistoryTests(TestCase):
         response = QueryAPIView.as_view()(request)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["data"], {"temperature_c": 18.0})
+        self.assertIsNone(response.data["errors"])
+        self.assertNotIn("classification", response.data)
+        self.assertNotIn("tool_result", response.data)
         self.assertEqual(QueryHistory.objects.count(), 1)
         record = QueryHistory.objects.get()
         self.assertEqual(record.query_text, "Weather in London?")
@@ -86,6 +91,39 @@ class QueryAPIViewHistoryTests(TestCase):
         self.assertTrue(record.tool_response["cached"])
         self.assertEqual(record.status, QueryStatus.COMPLETED)
         self.assertIsNotNone(record.processing_time_ms)
+
+    @patch("apps.router.views.ToolRouter")
+    @patch("apps.router.views.IntentClassifier")
+    def test_tool_failure_returns_flat_error_envelope(self, mock_classifier_cls, mock_router_cls):
+        mock_classifier_cls.return_value.classify.return_value = {
+            "intent": "INVOICE_GENERATION",
+            "confidence": 0.95,
+            "parameters": {"order_id": 999},
+        }
+        mock_router_cls.return_value.route.return_value = {
+            "success": False,
+            "data": None,
+            "errors": {"order_id": ["Order 999 does not exist."]},
+            "meta": {"cached": False},
+        }
+
+        factory = APIRequestFactory()
+        request = factory.post(
+            "/api/query/",
+            {"query": "Generate invoice for order 999"},
+            format="json",
+        )
+        response = QueryAPIView.as_view()(request)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["success"])
+        self.assertIsNone(response.data["data"])
+        self.assertEqual(
+            response.data["errors"],
+            {"order_id": ["Order 999 does not exist."]},
+        )
+        record = QueryHistory.objects.get()
+        self.assertEqual(record.status, QueryStatus.FAILED)
 
     @patch("apps.router.views.IntentClassifier")
     def test_validation_failure_creates_history(self, mock_classifier_cls):
@@ -137,7 +175,7 @@ class QueryAPIViewThrottleTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
         self.assertFalse(response.data["success"])
-        self.assertEqual(response.data["message"], RATE_LIMIT_MESSAGE)
+        self.assertEqual(response.data["errors"]["rate_limit"], [RATE_LIMIT_MESSAGE])
         self.assertIsNone(response.data["data"])
         self.assertEqual(QueryHistory.objects.count(), 1)
         record = QueryHistory.objects.get()

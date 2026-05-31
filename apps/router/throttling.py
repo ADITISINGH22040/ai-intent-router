@@ -2,8 +2,9 @@ import json
 from typing import Any
 
 from rest_framework import status
-from rest_framework.response import Response
 from rest_framework.views import exception_handler
+
+from apps.router.responses import api_response
 
 RATE_LIMIT_MESSAGE = "Rate limit exceeded. Please try again later."
 
@@ -29,18 +30,15 @@ def _extract_query(request: Any) -> str:
     return ""
 
 
-def rate_limit_response() -> Response:
-    return Response(
-        {
-            "success": False,
-            "message": RATE_LIMIT_MESSAGE,
-            "data": None,
-        },
-        status=status.HTTP_429_TOO_MANY_REQUESTS,
+def rate_limit_response():
+    return api_response(
+        success=False,
+        errors={"rate_limit": [RATE_LIMIT_MESSAGE]},
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
     )
 
 
-def api_exception_handler(exc: Exception, context: dict[str, Any]) -> Response | None:
+def api_exception_handler(exc: Exception, context: dict[str, Any]):
     from django.conf import settings
 
     from apps.router.services.history_service import HistoryService

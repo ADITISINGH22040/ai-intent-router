@@ -59,22 +59,21 @@ class QueryAPIView(APIView):
                 classification["intent"],
                 classification["parameters"],
             )
-            data = {
-                "query": query,
-                "classification": classification,
-                "tool_result": tool_result,
-            }
 
             history.update(
                 {
-                    "response": data,
+                    "response": tool_result,
                     "success": tool_result["success"],
                     "error": tool_result["errors"] if not tool_result["success"] else None,
                     "cached": tool_result.get("meta", {}).get("cached", False),
                 }
             )
 
-            return api_response(success=True, data=data)
+            return api_response(
+                success=tool_result["success"],
+                data=tool_result["data"],
+                errors=tool_result["errors"],
+            )
         except IntentClassificationError as exc:
             history["success"] = False
             history["error"] = {"classification": [str(exc)]}
