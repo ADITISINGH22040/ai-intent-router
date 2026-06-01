@@ -7,6 +7,12 @@ from django.test import SimpleTestCase, override_settings
 from apps.router.services.cache_service import CacheService
 from apps.router.tools.currency_tool import CurrencyTool
 from apps.router.tools.weather_tool import WeatherTool
+from apps.router.user_errors import (
+    CURRENCY_UNAVAILABLE,
+    WEATHER_LOCATION_NOT_FOUND,
+    WEATHER_UNAVAILABLE,
+)
+from requests import HTTPError
 
 LOC_MEM_CACHES = {
     "default": {
@@ -24,7 +30,8 @@ class WeatherToolTests(SimpleTestCase):
     def test_requires_api_key(self):
         result = WeatherTool().execute({"location": "Lucknow"})
         self.assertFalse(result["success"])
-        self.assertIn("config", result["errors"])
+        self.assertIn("service", result["errors"])
+        self.assertEqual(result["errors"]["service"], [WEATHER_UNAVAILABLE])
 
     @override_settings(WEATHERAPI_API_KEY="test-key", TOOL_REQUEST_TIMEOUT=5)
     @patch("apps.router.tools.weather_tool.requests.get")
@@ -89,6 +96,22 @@ class WeatherToolTests(SimpleTestCase):
         self.assertEqual(result["data"], cached_payload)
         mock_get.assert_not_called()
 
+    @override_settings(WEATHERAPI_API_KEY="test-key", TOOL_REQUEST_TIMEOUT=5)
+    @patch("apps.router.tools.weather_tool.requests.get")
+    def test_invalid_location_returns_normalized_error(self, mock_get):
+        response = MagicMock(status_code=400)
+        response.raise_for_status.side_effect = HTTPError(
+            "400 Client Error",
+            response=response,
+        )
+        mock_get.return_value = response
+
+        result = WeatherTool().execute({"location": "jsasdjgsadjgsdj"})
+
+        self.assertFalse(result["success"])
+        self.assertEqual(result["errors"]["location"], [WEATHER_LOCATION_NOT_FOUND])
+        self.assertNotIn("weatherapi.com", str(result["errors"]))
+
 
 @override_settings(CACHES=LOC_MEM_CACHES)
 class CurrencyToolTests(SimpleTestCase):
@@ -101,7 +124,8 @@ class CurrencyToolTests(SimpleTestCase):
             {"amount": 100, "from_currency": "USD", "to_currency": "INR"}
         )
         self.assertFalse(result["success"])
-        self.assertIn("config", result["errors"])
+        self.assertIn("service", result["errors"])
+        self.assertEqual(result["errors"]["service"], [CURRENCY_UNAVAILABLE])
 
     @override_settings(EXCHANGERATE_API_KEY="test-key", TOOL_REQUEST_TIMEOUT=5)
     @patch("apps.router.tools.currency_tool.requests.get")
@@ -153,3 +177,21 @@ class CurrencyToolTests(SimpleTestCase):
         self.assertEqual(result["data"]["conversion_rate"], "83.5")
         self.assertEqual(result["data"]["converted_amount"], "4175.0000")
         mock_get.assert_not_called()
+
+    @override_settings(EXCHANGERATE_API_KEY="test-key", TOOL_REQUEST_TIMEOUT=5)
+    @patch("apps.router.tools.currency_tool.requests.get")
+    def test_api_failure_returns_normalized_error(self, mock_get):
+        response = MagicMock(status_code=502)
+        response.raise_for_status.side_effect = HTTPError(
+            "502 Server Error",
+            response=response,
+        )
+        mock_get.return_value = response
+
+        result = CurrencyTool().execute(
+            {"amount": 100, "from_currency": "USD", "to_currency": "INR"}
+        )
+
+        self.assertFalse(result["success"])
+        self.assertEqual(result["errors"]["currency"], [CURRENCY_UNAVAILABLE])
+        self.assertNotIn("exchangerate", str(result["errors"]).lower())

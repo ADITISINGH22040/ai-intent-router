@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 
 from apps.router.constants.intents import (
@@ -12,6 +13,8 @@ from apps.router.llm.factory import get_llm_provider
 from apps.router.services.exceptions import IntentClassificationError
 
 ACTIONABLE_INTENTS = ALLOWED_INTENTS - {Intent.UNKNOWN}
+
+logger = logging.getLogger(__name__)
 
 
 class IntentClassifier:
@@ -30,6 +33,12 @@ class IntentClassifier:
         raw_classification = self._get_provider().classify_intent(query)
         classification = self._validate_classification(raw_classification)
         self._ensure_actionable(classification)
+        logger.info(
+            "Intent classified intent=%s confidence=%s parameters=%s",
+            classification["intent"],
+            classification["confidence"],
+            classification["parameters"],
+        )
         return classification
 
     def _get_provider(self) -> BaseLLMProvider:

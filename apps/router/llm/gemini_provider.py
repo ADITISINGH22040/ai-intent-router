@@ -1,8 +1,12 @@
+import logging
+
 import httpx
 from django.conf import settings
 
 from apps.router.llm.base import BaseLLMProvider
 from apps.router.llm.exceptions import LLMConfigurationError, LLMProviderError
+
+logger = logging.getLogger(__name__)
 
 
 class GeminiProvider(BaseLLMProvider):
@@ -47,6 +51,7 @@ class GeminiProvider(BaseLLMProvider):
             )
             response.raise_for_status()
         except httpx.HTTPError as exc:
+            logger.error("Gemini request failed model=%s error=%s", self.model, exc)
             raise LLMProviderError(f"Gemini request failed: {exc}") from exc
 
         return self._extract_text(response.json())

@@ -82,3 +82,42 @@ class InvoiceToolTests(TestCase):
             second["data"]["invoice"]["invoice_number"],
         )
         self.assertEqual(Invoice.objects.filter(order=self.order).count(), 1)
+
+    def test_rejects_ineligible_order_statuses(self):
+        tool = InvoiceTool()
+        ineligible_statuses = [
+            OrderStatus.PENDING,
+            OrderStatus.PROCESSING,
+            OrderStatus.CANCELLED,
+        ]
+
+        for index, status in enumerate(ineligible_statuses):
+            with self.subTest(status=status):
+                order = Order.objects.create(
+                    customer=self.order.customer,
+                    status=status,
+                    total_amount="50.00",
+                    currency="USD",
+                )
+                result = tool.execute({"order_id": order.id})
+
+                self.assertFalse(result["success"])
+                self.assertIn("status", result["errors"])
+                self.assertEqual(Invoice.objects.filter(order=order).count(), 0)
+
+    def test_allows_shipped_and_delivered_orders(self):
+        tool = InvoiceTool()
+
+        for status in (OrderStatus.SHIPPED, OrderStatus.DELIVERED):
+            with self.subTest(status=status):
+                order = Order.objects.create(
+                    customer=self.order.customer,
+                    status=status,
+                    total_amount="75.00",
+                    currency="USD",
+                )
+                result = tool.execute({"order_id": order.id})
+
+                self.assertTrue(result["success"])
+                self.assertTrue(result["data"]["created"])
+                self.assertEqual(Invoice.objects.filter(order=order).count(), 1)

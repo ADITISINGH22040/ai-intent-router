@@ -1,11 +1,14 @@
 import hashlib
+import logging
 from typing import Any
 
 from apps.router.llm import get_llm_provider
 from apps.router.llm.exceptions import LLMProviderError
 from apps.router.services.cache_service import SUMMARY_CACHE_TTL, CacheService
 from apps.router.tools.base import BaseTool
-from apps.router.tools.exceptions import ToolExecutionError
+from apps.router.user_errors import SUMMARY_UNAVAILABLE
+
+logger = logging.getLogger(__name__)
 
 SUMMARY_PROMPT_TEMPLATE = (
     "Summarize the following text in 2-4 concise sentences. "
@@ -36,7 +39,13 @@ class SummaryTool(BaseTool):
                 SUMMARY_PROMPT_TEMPLATE.format(text=text)
             )
         except LLMProviderError as exc:
-            raise ToolExecutionError(f"Summary generation failed: {exc}") from exc
+            logger.warning("Summary generation failed error=%s", exc)
+            return {
+                "success": False,
+                "data": None,
+                "errors": {"summary": [SUMMARY_UNAVAILABLE]},
+                "meta": {"cached": False},
+            }
 
         data = {
             "summary": summary.strip(),

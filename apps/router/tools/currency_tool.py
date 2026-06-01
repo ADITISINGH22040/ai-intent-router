@@ -1,12 +1,19 @@
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any
 
+import logging
 import requests
 from django.conf import settings
 
 from apps.router.services.cache_service import CURRENCY_RATE_CACHE_TTL, CacheService
 from apps.router.tools.base import BaseTool
-from apps.router.tools.exceptions import ToolExecutionError
+from apps.router.user_errors import (
+    CURRENCY_PAIR_NOT_FOUND,
+    CURRENCY_UNAVAILABLE,
+    message_for_request_exception,
+)
+
+logger = logging.getLogger(__name__)
 
 EXCHANGERATE_API_PAIR_URL = "https://v6.exchangerate-api.com/v6/{api_key}/pair/{base}/{target}"
 
@@ -18,10 +25,11 @@ class CurrencyTool(BaseTool):
     def execute(self, parameters: dict[str, Any]) -> dict[str, Any]:
         api_key = settings.EXCHANGERATE_API_KEY
         if not api_key:
+            logger.error("Currency conversion unavailable: EXCHANGERATE_API_KEY is not configured")
             return {
                 "success": False,
                 "data": None,
-                "errors": {"config": ["EXCHANGERATE_API_KEY is not configured."]},
+                "errors": {"service": [CURRENCY_UNAVAILABLE]},
                 "meta": {"cached": False},
             }
 
@@ -69,26 +77,56 @@ class CurrencyTool(BaseTool):
             response.raise_for_status()
             payload = response.json()
         except requests.RequestException as exc:
-            raise ToolExecutionError(f"Exchange rate API request failed: {exc}") from exc
-
-        if payload.get("result") != "success":
+            logger.warning(
+                "Exchange rate request failed pair=%s/%s error=%s",
+                from_currency,
+                to_currency,
+                exc,
+            )
             return {
                 "success": False,
                 "data": None,
                 "errors": {
                     "currency": [
-                        f"Could not fetch exchange rate for {from_currency}/{to_currency}."
+                        message_for_request_exception(
+                            exc,
+                            not_found=CURRENCY_PAIR_NOT_FOUND,
+                            unavailable=CURRENCY_UNAVAILABLE,
+                        )
                     ]
                 },
+                "meta": {"cached": False},
+            }
+
+        if payload.get("result") != "success":
+            logger.warning(
+                "Exchange rate lookup failed pair=%s/%s payload=%s",
+                from_currency,
+                to_currency,
+                payload,
+            )
+            return {
+                "success": False,
+                "data": None,
+                "errors": {"currency": [CURRENCY_PAIR_NOT_FOUND]},
                 "meta": {"cached": False},
             }
 
         try:
             conversion_rate = Decimal(str(payload["conversion_rate"]))
         except (KeyError, InvalidOperation) as exc:
-            raise ToolExecutionError(
-                "Unexpected response format from Exchange Rate API."
-            ) from exc
+            logger.error(
+                "Unexpected exchange rate response format pair=%s/%s error=%s",
+                from_currency,
+                to_currency,
+                exc,
+            )
+            return {
+                "success": False,
+                "data": None,
+                "errors": {"currency": [CURRENCY_UNAVAILABLE]},
+                "meta": {"cached": False},
+            }
 
         rate_last_updated_utc = payload.get("time_last_update_utc")
         self._cache.set(

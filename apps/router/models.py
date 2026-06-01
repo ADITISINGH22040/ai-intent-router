@@ -1,3 +1,5 @@
+from typing import Any
+
 from django.db import models
 
 from apps.router.constants.invoice_status import InvoiceStatus
@@ -28,6 +30,51 @@ class QueryHistory(models.Model):
         if len(self.query_text) > 50:
             preview += "..."
         return f"Query {self.pk}: {preview}"
+
+    @classmethod
+    def record(
+        cls,
+        *,
+        query: str,
+        intent: str = "",
+        confidence: float | None = None,
+        parameters: dict[str, Any] | None = None,
+        response: Any = None,
+        success: bool = False,
+        error: Any = None,
+        cached: bool = False,
+        provider: str = "",
+        tool: str = "",
+        processing_time_ms: int | None = None,
+    ) -> "QueryHistory":
+        llm_output: dict[str, Any] | None = None
+        if intent:
+            llm_output = {
+                "intent": intent,
+                "confidence": confidence,
+                "parameters": parameters,
+                "provider": provider,
+            }
+        elif error:
+            llm_output = {"error": error}
+
+        tool_response = response
+        if tool or cached or isinstance(tool_response, dict):
+            payload = dict(tool_response) if isinstance(tool_response, dict) else {}
+            payload.pop("meta", None)
+            if tool:
+                payload["tool"] = tool
+            if cached:
+                payload["cached"] = cached
+            tool_response = payload or tool_response
+
+        return cls.objects.create(
+            query_text=query,
+            llm_output=llm_output,
+            tool_response=tool_response,
+            status=QueryStatus.COMPLETED if success else QueryStatus.FAILED,
+            processing_time_ms=processing_time_ms,
+        )
 
 
 class Customer(models.Model):

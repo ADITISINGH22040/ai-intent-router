@@ -8,3 +8,12 @@ class OrderStatus(models.TextChoices):
     SHIPPED = "shipped", "Shipped"
     DELIVERED = "delivered", "Delivered"
     CANCELLED = "cancelled", "Cancelled"
+
+
+INVOICE_ELIGIBLE_STATUSES = frozenset(
+    {
+        OrderStatus.CONFIRMED,
+        OrderStatus.SHIPPED,
+        OrderStatus.DELIVERED,
+    }
+)

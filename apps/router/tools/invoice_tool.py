@@ -4,8 +4,10 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.router.constants.invoice_status import InvoiceStatus
+from apps.router.constants.order_status import INVOICE_ELIGIBLE_STATUSES
 from apps.router.models import Invoice, Order
 from apps.router.tools.base import BaseTool
+from apps.router.user_errors import INVOICE_ORDER_STATUS_NOT_ELIGIBLE
 
 
 class InvoiceTool(BaseTool):
@@ -39,6 +41,14 @@ class InvoiceTool(BaseTool):
                     "invoice": self._serialize_invoice(existing_invoice),
                 },
                 "errors": None,
+                "meta": {"cached": False},
+            }
+
+        if order.status not in INVOICE_ELIGIBLE_STATUSES:
+            return {
+                "success": False,
+                "data": None,
+                "errors": {"status": [INVOICE_ORDER_STATUS_NOT_ELIGIBLE]},
                 "meta": {"cached": False},
             }
 

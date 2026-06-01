@@ -4,8 +4,10 @@ from unittest.mock import MagicMock, patch
 from django.core.cache import cache
 from django.test import SimpleTestCase, override_settings
 
+from apps.router.llm.exceptions import LLMProviderError
 from apps.router.services.cache_service import CacheService
 from apps.router.tools.summary_tool import SummaryTool
+from apps.router.user_errors import SUMMARY_UNAVAILABLE
 
 LOC_MEM_CACHES = {
     "default": {
@@ -54,3 +56,17 @@ class SummaryToolTests(SimpleTestCase):
         self.assertTrue(result["success"])
         self.assertTrue(result["meta"]["cached"])
         mock_get_provider.return_value.complete.assert_not_called()
+
+    @patch("apps.router.tools.summary_tool.get_llm_provider")
+    def test_llm_failure_returns_normalized_error(self, mock_get_provider):
+        mock_get_provider.return_value = MagicMock(
+            complete=MagicMock(
+                side_effect=LLMProviderError("Ollama request failed: http://127.0.0.1:11434")
+            )
+        )
+
+        result = SummaryTool().execute({"text": "Some text to summarize."})
+
+        self.assertFalse(result["success"])
+        self.assertEqual(result["errors"]["summary"], [SUMMARY_UNAVAILABLE])
+        self.assertNotIn("ollama", str(result["errors"]).lower())

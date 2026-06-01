@@ -100,7 +100,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PARSER_CLASSES": [
         "rest_framework.parsers.JSONParser",
     ],
-    # DRF throttling reads/writes request history via Django's cache API.
+    # DRF throttling stores per-client rate-limit counters in Django's cache API.
     # With Redis configured above, ScopedRateThrottle counters live in Redis.
     "DEFAULT_THROTTLE_RATES": {
         "query": "10/min",
@@ -122,3 +122,29 @@ TOOL_REQUEST_TIMEOUT = env.int("TOOL_REQUEST_TIMEOUT", default=15)
 
 WEATHERAPI_API_KEY = env("WEATHERAPI_API_KEY", default="")
 EXCHANGERATE_API_KEY = env("EXCHANGERATE_API_KEY", default="")
+
+LOG_LEVEL = env("LOG_LEVEL", default="INFO")
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "{levelname} {asctime} {name} {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+    },
+    "loggers": {
+        "apps.router": {
+            "handlers": ["console"],
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
+    },
+}

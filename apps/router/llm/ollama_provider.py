@@ -1,9 +1,13 @@
+import logging
+
 import httpx
 from django.conf import settings
 
 from apps.router.llm.base import BaseLLMProvider
 from apps.router.llm.exceptions import LLMConfigurationError, LLMProviderError
 from apps.router.llm.prompts import CLASSIFICATION_PROMPT
+
+logger = logging.getLogger(__name__)
 
 
 class OllamaProvider(BaseLLMProvider):
@@ -48,6 +52,7 @@ class OllamaProvider(BaseLLMProvider):
             response = httpx.post(url, json=payload, timeout=self.timeout)
             response.raise_for_status()
         except httpx.HTTPError as exc:
+            logger.error("Ollama request failed model=%s url=%s error=%s", self.model, url, exc)
             raise LLMProviderError(f"Ollama request failed: {exc}") from exc
 
         try:

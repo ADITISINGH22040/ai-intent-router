@@ -1,11 +1,18 @@
 from typing import Any
 
+import logging
 import requests
 from django.conf import settings
 
 from apps.router.services.cache_service import WEATHER_CACHE_TTL, CacheService
 from apps.router.tools.base import BaseTool
-from apps.router.tools.exceptions import ToolExecutionError
+from apps.router.user_errors import (
+    WEATHER_LOCATION_NOT_FOUND,
+    WEATHER_UNAVAILABLE,
+    message_for_request_exception,
+)
+
+logger = logging.getLogger(__name__)
 
 WEATHERAPI_CURRENT_URL = "https://api.weatherapi.com/v1/current.json"
 
@@ -17,10 +24,11 @@ class WeatherTool(BaseTool):
     def execute(self, parameters: dict[str, Any]) -> dict[str, Any]:
         api_key = settings.WEATHERAPI_API_KEY
         if not api_key:
+            logger.error("Weather lookup unavailable: WEATHERAPI_API_KEY is not configured")
             return {
                 "success": False,
                 "data": None,
-                "errors": {"config": ["WEATHERAPI_API_KEY is not configured."]},
+                "errors": {"service": [WEATHER_UNAVAILABLE]},
                 "meta": {"cached": False},
             }
 
@@ -47,14 +55,32 @@ class WeatherTool(BaseTool):
             response.raise_for_status()
             payload = response.json()
         except requests.RequestException as exc:
-            raise ToolExecutionError(f"Weather API request failed: {exc}") from exc
-
-        if payload.get("error"):
-            message = payload["error"].get("message", "Weather API returned an error.")
+            logger.warning("Weather lookup request failed location=%s error=%s", location, exc)
             return {
                 "success": False,
                 "data": None,
-                "errors": {"location": [message]},
+                "errors": {
+                    "location": [
+                        message_for_request_exception(
+                            exc,
+                            not_found=WEATHER_LOCATION_NOT_FOUND,
+                            unavailable=WEATHER_UNAVAILABLE,
+                        )
+                    ]
+                },
+                "meta": {"cached": False},
+            }
+
+        if payload.get("error"):
+            logger.warning(
+                "Weather lookup returned error location=%s payload=%s",
+                location,
+                payload.get("error"),
+            )
+            return {
+                "success": False,
+                "data": None,
+                "errors": {"location": [WEATHER_LOCATION_NOT_FOUND]},
                 "meta": {"cached": False},
             }
 
@@ -63,7 +89,13 @@ class WeatherTool(BaseTool):
             current = payload["current"]
             condition = current.get("condition", {})
         except (KeyError, TypeError) as exc:
-            raise ToolExecutionError("Unexpected response format from Weather API.") from exc
+            logger.error("Unexpected weather response format location=%s error=%s", location, exc)
+            return {
+                "success": False,
+                "data": None,
+                "errors": {"location": [WEATHER_UNAVAILABLE]},
+                "meta": {"cached": False},
+            }
 
         data = {
             "location": location,

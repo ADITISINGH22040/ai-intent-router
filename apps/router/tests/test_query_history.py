@@ -8,7 +8,6 @@ from rest_framework.test import APIRequestFactory
 
 from apps.router.constants.query_status import QueryStatus
 from apps.router.models import QueryHistory
-from apps.router.services.history_service import HistoryService
 from apps.router.throttling import RATE_LIMIT_MESSAGE, api_exception_handler
 from apps.router.views import QueryAPIView
 
@@ -28,9 +27,9 @@ REST_FRAMEWORK_SETTINGS = {
 }
 
 
-class HistoryServiceTests(TestCase):
-    def test_save_creates_query_history_row(self):
-        record = HistoryService.save(
+class QueryHistoryRecordTests(TestCase):
+    def test_record_creates_query_history_row(self):
+        record = QueryHistory.record(
             query="What's the weather in London?",
             intent="WEATHER_QUERY",
             confidence=0.91,
@@ -50,6 +49,26 @@ class HistoryServiceTests(TestCase):
         self.assertEqual(record.tool_response["tool"], "WeatherTool")
         self.assertEqual(record.status, QueryStatus.COMPLETED)
         self.assertEqual(record.processing_time_ms, 42)
+
+    def test_record_strips_meta_and_hoists_cached_flag(self):
+        record = QueryHistory.record(
+            query="Weather in London?",
+            intent="WEATHER_QUERY",
+            confidence=0.95,
+            parameters={"location": "London"},
+            response={
+                "success": True,
+                "data": {"temperature_c": 18.0},
+                "errors": None,
+                "meta": {"cached": True},
+            },
+            success=True,
+            cached=True,
+            tool="WeatherTool",
+        )
+
+        self.assertTrue(record.tool_response["cached"])
+        self.assertNotIn("meta", record.tool_response)
 
 
 @override_settings(CACHES=LOC_MEM_CACHES, REST_FRAMEWORK=REST_FRAMEWORK_SETTINGS)
@@ -89,6 +108,7 @@ class QueryAPIViewHistoryTests(TestCase):
         self.assertEqual(record.llm_output["confidence"], 0.95)
         self.assertEqual(record.tool_response["tool"], "WeatherTool")
         self.assertTrue(record.tool_response["cached"])
+        self.assertNotIn("meta", record.tool_response)
         self.assertEqual(record.status, QueryStatus.COMPLETED)
         self.assertIsNotNone(record.processing_time_ms)
 
@@ -115,7 +135,7 @@ class QueryAPIViewHistoryTests(TestCase):
         )
         response = QueryAPIView.as_view()(request)
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertFalse(response.data["success"])
         self.assertIsNone(response.data["data"])
         self.assertEqual(
